@@ -14,17 +14,17 @@ This is our Analyzing Big Data II course project. We tried to figure out the rel
 - Model Comparison
 - Interpretation of Multi Regression Model
 
-## Part V. Classifications Model with Categorical Target Variable
+### Part V. Classifications Model with Categorical Target Variable
 - Logistic Regression
 - KNN Classification
 - Decision Trees Classification
 - Interpretation of Classification methods
 
-## Part VI. Data Robot Modeling
+### Part VI. Data Robot Modeling
 - Light Gradient Boosted Trees Regressor with Early Stopping
 - Random Forest Classifier
 - Model Comparisons
 
-## Part VII. Conclusions and Reflections
+### Part VII. Conclusions and Reflections
 - Conclusion and Insights
 - Reflections	
