@@ -1,0 +1,312 @@
+---
+title: "No_Error_Lung_Cancer_mortality"
+author: "Chuyue"
+date: "4/11/2020"
+output: html_document
+---
+
+preliminaries
+```{r}
+library(data.table)
+library(tidyverse)
+library(FNN)
+library(ggplot2)
+library(factoextra)
+library(cluster)
+library(caret)
+library(gridExtra)
+library(car)
+library(modelr)
+library(NbClust)
+```
+
+
+# import data
+```{r,warning=FALSE, message=FALSE}
+# prepare data
+lungcancer <- read.csv(file = 'Air Quality_Lung Cancer Data.csv')
+lung = lungcancer[,c(1,4,5,7,8,9,15,16,17,18,19,20,21,23)]
+# nomalize data
+row.names(lung) <- lung[,1]
+lung <-lung[,-1]
+lung.norm <- sapply(lung, scale)
+lung.norm = as.data.frame(lung.norm)
+head(lung.norm[,-1])
+```
+
+
+# Feature Engineer
+# Kmeans Clustering
+
+clustering
+```{r,warning=FALSE, message=FALSE}
+# choose k
+gap_stat <- clusGap(lung.norm[,-1], FUN = kmeans, nstart = 20, K.max = 30, B = 20)
+fviz_gap_stat(gap_stat) + theme_minimal() + ggtitle("fviz_gap_stat: K-Means Gap Statistic")
+```
+
+```{r}
+# from plot, we choose k=3
+lungkm <- kmeans(lung.norm[,-1], 3)
+lungkm$centers
+lungkm$size
+dist(lungkm$centers)
+```
+
+```{r}
+# line plots
+plot(c(0), xaxt = 'n', ylab = "", type = "l", 
+     ylim = c(min(lungkm$centers), max(lungkm$centers)), xlim = c(0, 12))
+axis(1, at = c(1:12), labels = names(lung[-1]))
+for (i in c(1:3))
+  lines(lungkm$centers[i,], lty = i, lwd = 2, col = switch(i,  "red", "green", "purple"))
+text(x = 0.5, y = lungkm$centers[, 1], labels = paste("Cluster", c(1:3)))
+grid()
+```
+
+```{r}
+#cluster
+fviz_cluster(lungkm, data = lung.norm[,-1], geom = "point", main = "K-Means Plot")
+```
+
+```{r}
+#heatmap
+library(pheatmap)
+pheatmap(lung.norm[,-1], kmeans_k = 3,  cluster_rows = F, cluster_cols = F)
+```
+
+```{r}
+# scatter plot
+clusplot(lung.norm[,-1], lungkm$cluster, color=TRUE, shade=TRUE, labels=F, lines=0)
+
+with(lung.norm, pairs(lung.norm[,c(2:4,6)], col=c(1:3)[lungkm$cluster])) 
+
+lung.norm %>%
+  as_tibble() %>%
+  mutate(cluster = lungkm$cluster) %>%
+  ggplot(aes(PM2.5,Sociod_EQI, color = factor(cluster))) +
+  geom_point()
+lung.norm %>%
+  as_tibble() %>%
+  mutate(cluster = lungkm$cluster) %>%
+  ggplot(aes(PM2.5,Land_EQI, color = factor(cluster))) +
+  geom_point()
+```
+
+
+
+# Hierarchical Clustering
+```{R}
+# Try different methods for computing distance
+lungcancer_dist1<- dist(lung.norm[,-1], method = "euclidean")
+lungcancer_dist2<- dist(lung.norm[,-1], method = "maximum")
+lungcancer_dist3<- dist(lung.norm[,-1], method = "manhattan")
+lungcancer_dist4<- dist(lung.norm[,-1], method = "canberra")
+lungcancer_dist5<- dist(lung.norm[,-1], method = "binary")
+lungcancer_dist6<- dist(lung.norm[,-1], method = "minkowski")
+
+lungcancer_hc1<- hclust(lungcancer_dist1, method = "single")
+lungcancer_hc2<- hclust(lungcancer_dist1, method = "complete")
+lungcancer_hc3<- hclust(lungcancer_dist1, method = "average")
+lungcancer_hc4<- hclust(lungcancer_dist1, method = "median")
+lungcancer_hc5<- hclust(lungcancer_dist1, method = "centroid")
+lungcancer_hc6<- hclust(lungcancer_dist1, method = "ward.D")
+
+plot(lungcancer_hc1, hang = -1, ann = FALSE) 
+plot(lungcancer_hc2, hang = -1, ann = FALSE) 
+plot(lungcancer_hc3, hang = -1, ann = FALSE) 
+plot(lungcancer_hc4, hang = -1, ann = FALSE) 
+plot(lungcancer_hc5, hang = -1, ann = FALSE) 
+plot(lungcancer_hc6, hang = -1, ann = FALSE)
+# The plot using "ward.D" method looks the best.
+```
+
+
+```{R}
+# Choose best K for Hierarchical Clusrting.
+devAskNewPage(ask = TRUE)
+nc <- NbClust(lung.norm[,-1], distance = "euclidean", min.nc = 2, max.nc = 50, method = "ward.D")
+table(nc$Best.nc[1,])
+barplot(table(nc$Best.nc[1,]), xlab = "Number of Clusters", ylab = "Number of Criteria", main = "Choose K for Hierarchical Clusrting")
+```
+
+```{r}
+# Choose K by performing Gap Statistic Method
+mydist <- function(x) dist(x, method = "euclidean")
+myhier <- function(x, k) list(cluster=cutree(hclust(mydist(x), method = "ward.D"),k=k))
+myclusGap <- clusGap(lung.norm[,-1],FUN = myhier, K.max = 30, B = 10)
+fviz_gap_stat(myclusGap) + theme_minimal() + ggtitle("fviz_gap_stat: Gap Statistic")
+
+# Perform Average Silhouette Method
+fviz_nbclust(lung.norm[,-1], FUN = myhier , method = c("silhouette", "wss","gap_stat"), k.max = 20)
+
+# Perform Average Silhouette Method
+fviz_nbclust(lung.norm[,-1], FUN = kmeans, method = c("silhouette", "wss","gap_stat"), k.max = 20)
+```
+
+# Determining Optimal Clusters
+```{r}
+# Considering the number of clusters and the distribution, we choose k equal to 3.
+lungcancer_cut <- cutree(lungcancer_hc6, k = 3) #ward.D
+```
+#Visualization
+```{r}
+#dendrogram
+hcd <- as.dendrogram(lungcancer_hc6)
+nodePar <- list(lab.cex = 0.001, pch = c(NA, 19), 
+                cex = 0.001, col = "blue")
+plot(hcd, ylab = "Height", nodePar = nodePar, leaflab = "none")
+rect.hclust(lungcancer_hc6, k=3, border = 2:4)
+```
+
+
+```{r pressure, echo=FALSE}
+# heatmap
+library(pheatmap)
+pheatmap(lung.norm[,-1], clustering_method = "ward.D", scale = 'row', cutree_rows = 3, cluster_cols = F, show_rownames = F)
+```
+```{r}
+# Visualize the result in a scatter plot
+fviz_cluster(list(cluster = lungcancer_cut, data = lung.norm[,-1]), geom = c("point"), main = "Hierarchical Plot")
+```
+
+```{r}
+# Analyze the trend between lung cancer Mortality and PM2.5 from the data cluster-wise 
+seeds_df_cl <- mutate(lung.norm[,-1], cluster = lungcancer_cut)
+ggplot(seeds_df_cl, aes(x=PM2.5, y = Land_EQI, color = factor(cluster))) + geom_point()
+```
+
+
+```{r,warning=FALSE, message=FALSE}
+#add the cluster label back to your original data as a new predictor: KMeansCluster
+KMeansCluster = as.factor(lungkm$cluster)
+Hie_Cluster = as.factor(lungcancer_cut)
+lung_newlabels <- cbind(lungcancer,KMeansCluster,Hie_Cluster)
+head(lung_newlabels)
+#write.csv(lungkmeans, "lungcancerkmeans", sep="\t", row.names=FALSE, col.names=FALSE)
+```
+
+
+# original model from assignment 2
+# Partition training and testing data
+```{R}
+set.seed(1233)
+
+## training set 70%, testing set 30%
+id_train <- createDataPartition(lung_newlabels$Lung.Cancer, p=0.7)$Resample1
+training <- lung_newlabels[id_train, ]
+testing <- lung_newlabels[-id_train,]
+```
+
+```{r}
+#original model from assignment2
+model_original <- lm(Lung.Cancer ~ PM2.5 + Land_EQI + Sociod_EQI + Built_EQI + O3 + CO + Water_EQI + I(PM2.5^2) + I(O3^2) + I(CO^2)  + I(Sociod_EQI^2) + I(Built_EQI^2) + I(Water_EQI^2) + PM2.5:Land_EQI + PM2.5:Sociod_EQI + PM2.5:Built_EQI  + PM2.5:CO + PM2.5:Water_EQI +  Sociod_EQI:O3 + Sociod_EQI:CO + Sociod_EQI:Water_EQI  + Built_EQI:Water_EQI + CO:Water_EQI, data = training)
+
+summary(model_original)
+#broom::glance(model_original)
+```
+
+```{R}
+# original_model_testing_rmse&rsquare
+prediction_original <- predict(model_original, newdata = testing)
+
+R_square <- rsquare(model_original, data = testing)
+RMSE <- sqrt(mean((testing$Lung.Cancer - prediction_original)^2))
+residuals_original <- prediction_original - testing$Lung.Cancer
+cat("R-Squared:", R_square, "\nRMSE:", RMSE)
+``` 
+
+
+
+# add cluster variables 
+```{R}
+model_withclusteringlabel <- lm(Lung.Cancer ~ PM2.5 + Land_EQI + Sociod_EQI + Built_EQI + O3 + CO + Water_EQI + I(PM2.5^2) + I(O3^2) + I(CO^2)  + I(Sociod_EQI^2) + I(Built_EQI^2) + I(Water_EQI^2) + PM2.5:Land_EQI + PM2.5:Sociod_EQI + PM2.5:Built_EQI  + PM2.5:CO + PM2.5:Water_EQI +  Sociod_EQI:O3 + Sociod_EQI:CO + Sociod_EQI:Water_EQI  + Built_EQI:Water_EQI + CO:Water_EQI + Hie_Cluster + KMeansCluster, data = training)
+
+summary(model_withclusteringlabel)
+# broom::glance(model_withclusteringlabel)
+```
+
+```{R}
+# removing unsiginificant variables
+model_withclusteringlabel_2 <- lm(Lung.Cancer ~ PM2.5 + Land_EQI + Sociod_EQI + Built_EQI + O3 + CO + Water_EQI + I(PM2.5^2) + I(O3^2) + I(CO^2)  + I(Sociod_EQI^2) + I(Built_EQI^2) + I(Water_EQI^2)  + PM2.5:Sociod_EQI + PM2.5:Built_EQI  + PM2.5:CO + PM2.5:Water_EQI +  Sociod_EQI:O3 + Sociod_EQI:CO + Sociod_EQI:Water_EQI  + Built_EQI:Water_EQI + CO:Water_EQI + Hie_Cluster + KMeansCluster, data = training)
+
+summary(model_withclusteringlabel_2)
+# broom::glance(model_withclusteringlabel)
+
+vif(model_withclusteringlabel_2)
+```
+
+# assessing residuals
+## residuals histogram
+
+```{R}
+hist(model_withclusteringlabel_2$residuals, breaks = 20, col = "lavenderblush2", xlab = "Residuals" , ylab = "Frequency", main = "Histogram of Residuals")
+```
+
+```{R}
+plot(model_withclusteringlabel_2, which = 1, id.n = 10)
+plot(model_withclusteringlabel_2, which = 2, id.n = 10)
+plot(model_withclusteringlabel_2, which = 4, id.n = 10)
+plot(model_withclusteringlabel_2, which = 5, id.n = 10)
+```
+```{r}
+# remove outliers
+standarlized_residual <- as.data.frame(scale(model_withclusteringlabel_2$residual))
+training_withres <- cbind(standarlized_residual,training)
+training_withres_removeoutliers <- training_withres %>% arrange(desc(V1)) %>% filter(V1<3&V1>-3)
+```
+
+```{r}
+# rerun model 01
+model_withclusteringlabel_3 <- lm(Lung.Cancer ~ PM2.5 + Land_EQI + Sociod_EQI + Built_EQI + O3 + CO + Water_EQI + I(PM2.5^2) + I(O3^2) + I(CO^2)  + I(Sociod_EQI^2) + I(Built_EQI^2) + I(Water_EQI^2) + PM2.5:Land_EQI + PM2.5:Sociod_EQI + PM2.5:Built_EQI  + PM2.5:CO + PM2.5:Water_EQI +  Sociod_EQI:O3 + Sociod_EQI:CO + Sociod_EQI:Water_EQI  + Built_EQI:Water_EQI + CO:Water_EQI + Hie_Cluster + KMeansCluster, data = training_withres_removeoutliers)
+
+summary(model_withclusteringlabel_3)
+```
+
+```{r}
+plot(model_withclusteringlabel_3, which = 1, id.n = 10)
+plot(model_withclusteringlabel_3, which = 2, id.n = 10)
+plot(model_withclusteringlabel_3, which = 4, id.n = 10)
+plot(model_withclusteringlabel_3, which = 5, id.n = 10)
+
+hist(model_withclusteringlabel_3$residuals, breaks = 20, col = "lavenderblush2", xlab = "Residuals" , ylab = "Frequency", main = "Histogram of Residuals")
+```
+
+```{r}
+head(training_withres_removeoutliers)
+```
+
+
+```{R}
+prediction_new <- predict(model_withclusteringlabel_3, newdata = testing)
+
+R_square_new <- rsquare(model_withclusteringlabel_3, data = testing)
+
+RMSE_new <- sqrt(mean((testing$Lung.Cancer - prediction_new)^2))
+
+cat("R-Squared:", R_square_new, "\nRMSE:", RMSE_new)
+```
+
+```{R}
+cat("R-Squared:", R_square, "\nRMSE:", RMSE)
+```
+
+```{R}
+residuals_new <- prediction_new - testing$Lung.Cancer
+
+ggplot(mapping = aes(x = residuals_new)) + geom_histogram(fill = "pink", alpha = 0.5, color = "black") + ggtitle("Model4 Errors") + labs(x = "Errors")
+```
+
+# training model comparison
+```{R}
+summary(model_original)
+broom::glance(model_original)
+```
+```{r}
+broom::glance(model_withclusteringlabel_3)
+```
+
+
+
+
+
