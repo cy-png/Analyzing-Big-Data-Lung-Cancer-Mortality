@@ -1,6 +1,6 @@
 # Lung Cancer Mortality
-- Apr 17: This is our Analyzing Big Data II course project. We tried to figure out the relationship between lung cancer mortality and many environmental indicators.
-- MAY 7: Good News, the professor emailed us and said he wanted to transfer our report into a research paper.
+- Apr 17, 2020: This is our Analyzing Big Data II course project. We tried to figure out the relationship between lung cancer mortality and many environmental indicators.
+- May 7, 2020: Good News, the professor emailed us and said he wanted to transfer our report into a research paper.
 
 ### Part I&II&III
 - Background Knowledge and Assumption
